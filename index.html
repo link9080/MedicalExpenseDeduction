@@ -47,7 +47,17 @@
                         <input type="file" id="cameraInput" accept="image/*" capture="camera" class="hidden">
                     </div>
                 </label>
-                <p id="status" class="text-xs text-slate-400 mt-4 h-4"></p>
+                <div id="status" class="text-center text-sm text-slate-500 mb-4">
+                    画像をアップロードしてください
+                </div>
+
+                <div id="manualInputOption" class="hidden text-center mb-4">
+                    <p class="text-xs text-red-500 mb-2">AI解析が一時的に利用できません（503エラー等）</p>
+                    <button onclick="enableManualInput()"
+                        class="text-sm bg-white border border-slate-300 text-slate-600 px-4 py-2 rounded-full shadow-sm">
+                        ⌨️ 手動で入力する
+                    </button>
+                </div>
             </div>
 
             <div id="editCard"
@@ -89,4 +99,5 @@
     </main>
     <script src="js/app.js"></script>
 </body>
+
 </html>

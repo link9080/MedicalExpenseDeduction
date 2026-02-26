@@ -1,140 +1,250 @@
 /**
  * 医療費控除DX - Core Logic
  */
-
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzGnL-VjvBcYYK3MBUdFzTuq2NkqJCCbAP2gu5PFXZvhjLH3shj1QJNoaavhSRUlNe1hA/exec";
+// --- HTMLから直接呼ばれる関数を window に登録 ---
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyQS0xNJpvRSvfeATmek9-hz5zB7yCWVISyTNPcSpWVtyBMPvzOGTHq_O3nujgljCLSmw/exec";
 let lastImageBase64 = "";
-
-// 初期化：保存済みパスワードの読み込み
-window.onload = () => {
-    const saved = localStorage.getItem('my_app_pass');
-    if (saved) document.getElementById('appPass').value = saved;
-};
-
-// パスワード保存
-function savePass() {
+window.savePass = function () {
     localStorage.setItem('my_app_pass', document.getElementById('appPass').value);
     alert("パスワードを保存しました");
-}
+};
 
-// ページ（タブ）切り替え
-function showPage(p) {
+window.showPage = function (p) {
     const isReg = p === 'reg';
     document.getElementById('page-reg').classList.toggle('hidden', !isReg);
     document.getElementById('page-view').classList.toggle('hidden', isReg);
 
-    const activeClass = "flex-1 py-3 rounded-2xl font-bold bg-blue-600 text-white shadow-lg";
-    const inactiveClass = "flex-1 py-3 rounded-2xl font-bold bg-white text-slate-600 border border-slate-200";
+    const active = "flex-1 py-3 rounded-2xl font-bold bg-blue-600 text-white shadow-lg";
+    const inactive = "flex-1 py-3 rounded-2xl font-bold bg-white text-gray-600 border border-gray-200";
 
-    document.getElementById('btn-tab-reg').className = isReg ? activeClass : inactiveClass;
-    document.getElementById('btn-tab-view').className = !isReg ? activeClass : inactiveClass;
-}
-
-// 画像選択・解析イベント
-document.getElementById('cameraInput').onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const status = document.getElementById('status');
-    status.innerText = "🔄 画像を解析中...";
-
-    try {
-        const base64 = await resizeImage(file);
-        lastImageBase64 = base64;
-
-        const res = await fetch(GAS_URL, {
-            method: 'POST',
-            body: JSON.stringify({
-                action: "analyze",
-                imageBase64: base64,
-                pass: localStorage.getItem('my_app_pass')
-            })
-        });
-        const json = await res.json();
-
-        if (json.status === "success") {
-            document.getElementById('td-date').innerText = json.data.date;
-            document.getElementById('td-price').innerText = json.data.price;
-            document.getElementById('td-store').innerText = json.data.store;
-            document.getElementById('td-item').innerText = json.data.itemName;
-            document.getElementById('editCard').classList.remove('hidden');
-            status.innerText = "✨ 解析が完了しました";
-        } else {
-            alert(json.message);
-            status.innerText = "❌ エラーが発生しました";
-        }
-    } catch (err) {
-        alert("通信エラーが発生しました。");
-        console.error(err);
-    }
+    document.getElementById('btn-tab-reg').className = isReg ? active : inactive;
+    document.getElementById('btn-tab-view').className = !isReg ? active : inactive;
 };
 
-// 最終登録イベント
-document.getElementById('regBtn').onclick = async () => {
-    const btn = document.getElementById('regBtn');
-    let date = document.getElementById('td-date').innerText.trim();
-    let store = document.getElementById('td-store').innerText.trim();
-    let itemName = document.getElementById('td-item').innerText.trim();
-    let price = document.getElementById('td-price').innerText.replace(/[^0-9]/g, '');
+// 手動入力を有効にする
+window.enableManualInput = function () {
+    const cameraInput = document.getElementById('cameraInput');
+    cameraInput.disabled = false;
+    cameraInput.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+    // ステータスを更新
+    document.getElementById('status').innerText = "⌨️ 手動で項目を入力してください";
+    // 編集カード（黄色いテーブル）を表示し、中身を空にする
+    document.getElementById('editCard').classList.remove('hidden');
+    document.getElementById('manualInputOption').classList.add('hidden');
 
-    // バリデーション
-    if (!/^\d{4}\/\d{2}\/\d{2}$/.test(date)) return alert("日付形式を YYYY/MM/DD にしてください");
-    if (!price) return alert("金額を数字で入力してください");
+    document.getElementById('td-date').innerText = new Date().toISOString().split('T')[0].replace(/-/g, '/');
+    document.getElementById('td-price').innerText = "0";
+    document.getElementById('td-store').innerText = "（手動入力）";
+    document.getElementById('td-item').innerText = "（手動入力）";
 
-    btn.disabled = true;
-    btn.innerText = "⌛ 保存中...";
-
-    const data = {
-        action: "register",
-        pass: localStorage.getItem('my_app_pass'),
-        date, store, itemName, price,
-        imageBaseBase64: lastImageBase64
-    };
-
-    try {
-        const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
-        const json = await res.json();
-        if (json.status === "success") {
-            alert("登録完了しました！");
-            location.reload();
-        } else {
-            alert(json.message);
-            btn.disabled = false;
-        }
-    } catch (e) {
-        alert("送信エラー");
-        btn.disabled = false;
-    }
+    // 登録ボタンを表示
+    document.getElementById('regBtn').classList.remove('hidden');
+    document.getElementById('regBtn').innerText = "💾 手動で登録する";
 };
 
-// 履歴一覧の読み込み
-async function loadList() {
+window.loadList = async function () {
     const listBody = document.getElementById('listBody');
-    listBody.innerHTML = '<p class="text-center text-slate-400 py-10">読み込み中...</p>';
-
+    listBody.innerHTML = '<p class="text-center text-gray-400 py-10">読み込み中...</p>';
     const pass = localStorage.getItem('my_app_pass');
     try {
         const res = await fetch(`${GAS_URL}?pass=${pass}`);
         const data = await res.json();
-
-        listBody.innerHTML = data.reverse().map(row => `
-            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-300">
+        listBody.innerHTML = data.reverse().map(item => `
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex justify-between items-center">
                 <div>
-                    <div class="text-[10px] text-slate-400 font-mono">${row.date}</div>
-                    <div class="font-bold text-slate-800 text-sm">${row.itemName}</div>
-                    <div class="text-xs text-slate-500">${row.store}</div>
+                    <div class="text-[10px] text-gray-400 font-mono">${item.date}</div>
+                    <div class="font-bold text-gray-800 text-sm">${item.itemName}</div>
+                    <div class="text-xs text-gray-500">${item.store}</div>
                 </div>
                 <div class="text-right">
-                    <div class="font-black text-blue-600">¥${Number(row.price).toLocaleString()}</div>
-                    <a href="${row.fileUrl}" target="_blank" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded-md mt-1 inline-block">証憑を表示</a>
+                    <div class="font-black text-blue-600">¥${Number(item.price).toLocaleString()}</div>
+                    <div class="flex gap-2 mt-2 justify-end">
+                        <a href="${item.fileUrl}" target="_blank" class="text-[10px] bg-blue-50 text-blue-500 px-2 py-1 rounded-md">証憑</a>
+                        <button onclick="editItem(${item.rowNum}, '${item.date}', '${item.price}', '${item.store}', '${item.itemName}')" 
+                    class="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded-md">編集</button>
+                        <button onclick="deleteItem(${item.rowNum})" class="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-md">削除</button>
+                    </div>
+                </div>
+                <div class="border-t border-gray-50 pt-2 mt-2 text-[9px] text-gray-300 flex justify-between">
+                    <span>登録日: ${item.registerDate}</span>
                 </div>
             </div>
         `).join('');
     } catch (e) {
-        listBody.innerHTML = '<p class="text-center text-red-400 py-10">データの取得に失敗しました</p>';
+        console.log(e)
+        listBody.innerHTML = '<p class="text-center text-red-400 py-10">取得失敗。</p>';
     }
-}
+};
 
+// --- 削除用関数の追加 ---
+window.deleteItem = async function (rowNum) {
+    if (!confirm("このデータを削除してもよろしいですか？（スプレッドシートから行が削除されます）")) return;
+
+    const pass = localStorage.getItem('my_app_pass');
+    try {
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: "delete", rowNum: rowNum, pass: pass })
+        });
+        const json = await res.json();
+        if (json.status === "success") {
+            alert("削除しました");
+            loadList(); // リストを再読み込み
+        }
+    } catch (e) {
+        alert("削除に失敗しました");
+    }
+};
+
+// --- 編集用関数 ---
+window.editItem = function (rowNum, date, price, store, itemName) {
+    // 登録用フォームを編集用に流用する
+    showPage('reg');
+    document.getElementById('status').innerText = "📝 データを編集して保存してください";
+
+    // フォームに現在の値をセット
+    document.getElementById('td-date').innerText = date;
+    document.getElementById('td-price').innerText = price;
+    document.getElementById('td-store').innerText = store;
+    document.getElementById('td-item').innerText = itemName;
+    document.getElementById('editCard').classList.remove('hidden');
+
+    // 登録ボタンを「更新ボタン」に書き換える
+    const regBtn = document.getElementById('regBtn');
+    regBtn.innerText = "🆙 データを更新する";
+    regBtn.onclick = async () => {
+        const pass = localStorage.getItem('my_app_pass');
+        const data = {
+            action: "update",
+            rowNum: rowNum,
+            pass: pass,
+            date: document.getElementById('td-date').innerText.trim(),
+            price: document.getElementById('td-price').innerText.replace(/[^0-9]/g, ''),
+            store: document.getElementById('td-store').innerText.trim(),
+            itemName: document.getElementById('td-item').innerText.trim()
+        };
+
+        const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
+        if ((await res.json()).status === "success") {
+            alert("更新しました");
+            location.reload();
+        }
+    };
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('my_app_pass');
+    if (saved) document.getElementById('appPass').value = saved;
+
+
+    // 画像選択・解析イベント
+    document.getElementById('cameraInput').onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const status = document.getElementById('status');
+        const label = e.target.parentElement; // 枠（label）を取得
+
+        // --- 処理開始: ボタンを非活性に ---
+        e.target.disabled = true;
+        label.classList.add('opacity-50', 'pointer-events-none');
+        status.innerText = "🔄 画像を解析中...";
+        document.getElementById('manualInputOption').classList.add('hidden'); // ボタンを隠しておく
+
+        try {
+            const base64 = await resizeImage(file);
+            lastImageBase64 = base64;
+
+            const res = await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: "analyze",
+                    imageBase64: base64,
+                    pass: localStorage.getItem('my_app_pass')
+                })
+            });
+
+            // 503エラーなどのHTTPエラーをキャッチ
+            if (res.status === 503) {
+                status.innerText = "❌ AIサーバーが混雑しています";
+                document.getElementById('manualInputOption').classList.remove('hidden');
+                return;
+            }
+
+            const json = await res.json();
+            console.log("GASからのレスポンス:", json);
+
+            if (json.status === "success") {
+                document.getElementById('td-date').innerText = json.data.date;
+                document.getElementById('td-price').innerText = json.data.price;
+                document.getElementById('td-store').innerText = json.data.store;
+                document.getElementById('td-item').innerText = json.data.itemName;
+                document.getElementById('editCard').classList.remove('hidden');
+                document.getElementById('regBtn').classList.remove('hidden'); // ボタン表示
+                status.innerText = "✨ 解析が完了しました";
+            } else {
+                status.innerText = "❌ 解析エラー: " + json.message;
+                document.getElementById('manualInputOption').classList.remove('hidden');
+            }
+        } catch (err) {
+            console.error("通信失敗:", err);
+            status.innerText = "❌ 通信に失敗しました";
+            document.getElementById('manualInputOption').classList.remove('hidden');
+        } finally {
+            // --- 処理終了: ボタンを活性に戻す ---
+            e.target.disabled = false;
+            label.classList.remove('opacity-50', 'pointer-events-none');
+        }
+    };
+
+    // 最終登録イベント
+    document.getElementById('regBtn').onclick = async () => {
+        const btn = document.getElementById('regBtn');
+        let date = document.getElementById('td-date').innerText.trim();
+        let store = document.getElementById('td-store').innerText.trim();
+        let itemName = document.getElementById('td-item').innerText.trim();
+        let price = document.getElementById('td-price').innerText.replace(/[^0-9]/g, '');
+
+        // バリデーション
+        if (!/^\d{4}\/\d{2}\/\d{2}$/.test(date)) return alert("日付形式を YYYY/MM/DD にしてください");
+        if (!price) return alert("金額を数字で入力してください");
+
+        // --- 処理開始: ボタンを非活性に ---
+        btn.disabled = true;
+        btn.innerText = "⌛ 保存中...";
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        btn.disabled = true;
+        btn.innerText = "⌛ 保存中...";
+
+        const data = {
+            action: "register",
+            pass: localStorage.getItem('my_app_pass'),
+            date, store, itemName, price,
+            imageBaseBase64: lastImageBase64
+        };
+
+        try {
+            const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
+            const json = await res.json();
+            if (json.status === "success") {
+                alert("登録完了しました！");
+                location.reload();
+            } else {
+                alert(json.message);
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert("送信エラー");
+            // 失敗時のみボタンを戻す
+            btn.disabled = false;
+            btn.innerText = "✅ この内容で確定・保存";
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+        }
+    };
+
+})
 // 画像リサイズ処理
 function resizeImage(file) {
     return new Promise(res => {
