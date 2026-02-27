@@ -62,13 +62,22 @@
 
             <div id="editCard"
                 class="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden hidden animate-in fade-in duration-500">
-                <div class="bg-blue-50 p-4 border-b border-blue-100">
-                    <h2 class="text-blue-800 font-bold text-sm">AI解析結果（修正可能です）</h2>
+                <div class="bg-blue-50 p-4 border-b border-blue-100 flex justify-between items-center">
+                    <h2 class="text-blue-800 font-bold text-sm">AI解析結果</h2>
+                    <span class="text-[10px] bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">修正可能</span>
+                </div>
+
+                <div id="thumbContainer" class="p-4 bg-slate-50 flex justify-center border-b border-slate-100 hidden">
+                    <img id="thumbnail" src="" alt="レシートプレビュー"
+                        class="max-h-48 rounded-lg shadow-sm border border-white">
                 </div>
                 <table class="w-full">
                     <tr class="border-b border-slate-100">
                         <th class="w-1/3 p-4 text-left text-xs text-slate-500 bg-slate-50/50">取引年月日</th>
-                        <td id="td-date" class="edit-area p-4 font-mono font-bold text-blue-700" contenteditable="true">
+                        <td class="p-4 relative">
+                            <div id="td-date" class="font-mono font-bold text-blue-700 text-lg"></div>
+                            <input type="date" id="date-picker"
+                                class="absolute inset-0 opacity-0 w-full h-full cursor-pointer">
                         </td>
                     </tr>
                     <tr class="border-b border-slate-100">

@@ -2,8 +2,9 @@
  * 医療費控除DX - Core Logic
  */
 // --- HTMLから直接呼ばれる関数を window に登録 ---
-const GAS_URL = "https://script.google.com/macros/s/AKfycbyQS0xNJpvRSvfeATmek9-hz5zB7yCWVISyTNPcSpWVtyBMPvzOGTHq_O3nujgljCLSmw/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyiIRmPuoln0Xx3ShJXp4jqExBsT3CgPa_DjMsbKTXWpck789OomVGVAxoa3QDZSH9ohg/exec";
 let lastImageBase64 = "";
+let datePicker, dateDisplay; // ここで宣言
 window.savePass = function () {
     localStorage.setItem('my_app_pass', document.getElementById('appPass').value);
     alert("パスワードを保存しました");
@@ -36,6 +37,22 @@ window.enableManualInput = function () {
     document.getElementById('td-price').innerText = "0";
     document.getElementById('td-store').innerText = "（手動入力）";
     document.getElementById('td-item').innerText = "（手動入力）";
+
+    // datePickerが取得できているか確認（なければここで取得）
+    if (!datePicker) datePicker = document.getElementById('date-picker');
+    if (!dateDisplay) dateDisplay = document.getElementById('td-date');
+
+    const today = new Date().toISOString().split('T')[0];
+    datePicker.value = today;
+    dateDisplay.innerText = today.replace(/-/g, '/');
+
+    // 画像があれば出し、なければ隠す
+    const thumbContainer = document.getElementById('thumbContainer');
+    if (lastImageBase64) {
+        thumbContainer.classList.remove('hidden');
+    } else {
+        thumbContainer.classList.add('hidden');
+    }
 
     // 登録ボタンを表示
     document.getElementById('regBtn').classList.remove('hidden');
@@ -72,7 +89,11 @@ window.loadList = async function () {
         `).join('');
     } catch (e) {
         console.log(e)
-        listBody.innerHTML = '<p class="text-center text-red-400 py-10">取得失敗。</p>';
+        if (e.message.indexOf("Auth Error") != -1) {
+            listBody.innerHTML = '<p class="text-center text-red-400 py-10">❌ パスワードが違います</p>';
+        } else {
+            listBody.innerHTML = '<p class="text-center text-red-400 py-10">取得失敗。</p>';
+        }
     }
 };
 
@@ -90,6 +111,8 @@ window.deleteItem = async function (rowNum) {
         if (json.status === "success") {
             alert("削除しました");
             loadList(); // リストを再読み込み
+        } else if (json.message.includes("認証エラー")) {
+            alert("❌ パスワードが違います");
         }
     } catch (e) {
         alert("削除に失敗しました");
@@ -101,6 +124,10 @@ window.editItem = function (rowNum, date, price, store, itemName) {
     // 登録用フォームを編集用に流用する
     showPage('reg');
     document.getElementById('status').innerText = "📝 データを編集して保存してください";
+
+    // ★編集時はサムネイルを隠す
+    document.getElementById('thumbContainer').classList.add('hidden');
+    document.getElementById('thumbnail').src = "";
 
     // フォームに現在の値をセット
     document.getElementById('td-date').innerText = date;
@@ -125,9 +152,12 @@ window.editItem = function (rowNum, date, price, store, itemName) {
         };
 
         const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
-        if ((await res.json()).status === "success") {
+        const json = await res.json()
+        if (json.status === "success") {
             alert("更新しました");
             location.reload();
+        } else if (json.message.includes("認証エラー")) {
+            alert("❌ パスワードが違います");
         }
     };
 };
@@ -136,6 +166,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('my_app_pass');
     if (saved) document.getElementById('appPass').value = saved;
 
+    // --- 初期設定（DOM読み込み時などに追加） ---
+    datePicker = document.getElementById('date-picker');
+    dateDisplay = document.getElementById('td-date');
+
+    // カレンダーの値が変わったら表示を更新
+    datePicker.addEventListener('change', (e) => {
+        const val = e.target.value; // YYYY-MM-DD
+        if (val) {
+            dateDisplay.innerText = val.replace(/-/g, '/'); // YYYY/MM/DD 形式で表示
+        }
+    });
 
     // 画像選択・解析イベント
     document.getElementById('cameraInput').onchange = async (e) => {
@@ -154,6 +195,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const base64 = await resizeImage(file);
             lastImageBase64 = base64;
+
+            // ★サムネイルを表示し、コンテナの hidden を取る
+            const thumb = document.getElementById('thumbnail');
+            const thumbContainer = document.getElementById('thumbContainer');
+            thumb.src = "data:image/jpeg;base64," + base64;
+            thumbContainer.classList.remove('hidden');
 
             const res = await fetch(GAS_URL, {
                 method: 'POST',
@@ -181,7 +228,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('td-item').innerText = json.data.itemName;
                 document.getElementById('editCard').classList.remove('hidden');
                 document.getElementById('regBtn').classList.remove('hidden'); // ボタン表示
+                // AIが返してきた "2024/02/27" 形式を "2024-02-27" に変換してセット
+                const formattedDate = json.data.date.replace(/\//g, '-');
+                datePicker.value = formattedDate;
+                dateDisplay.innerText = json.data.date;
                 status.innerText = "✨ 解析が完了しました";
+            } else if (json.message.includes("認証エラー")) {
+                status.innerText = "❌ パスワードが違います";
             } else {
                 status.innerText = "❌ 解析エラー: " + json.message;
                 document.getElementById('manualInputOption').classList.remove('hidden');
@@ -194,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- 処理終了: ボタンを活性に戻す ---
             e.target.disabled = false;
             label.classList.remove('opacity-50', 'pointer-events-none');
+            e.target.value = "";
         }
     };
 
@@ -228,8 +282,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
             const json = await res.json();
             if (json.status === "success") {
-                alert("登録完了しました！");
-                location.reload();
+                alert("登録完了しました！続けて別の項目を登録できます。");
+
+                // 入力欄をクリア（画像 lastImageBase64 は保持される）
+                document.getElementById('td-price').innerText = "";
+                document.getElementById('td-item').innerText = "";
+                // 日付や店名は同じはずなので残しておくと便利です
+
+                btn.disabled = false;
+                btn.innerText = "✅ 続けて別の商品を登録";
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else if (json.message.includes("認証エラー")) {
+                alert(json.message);
             } else {
                 alert(json.message);
                 btn.disabled = false;

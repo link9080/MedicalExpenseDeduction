@@ -23,3 +23,35 @@
 .animate-in {
     animation: fadeIn 0.3s ease-out forwards;
 }
+
+#td-date {
+    position: relative;
+    z-index: 1;
+    pointer-events: none; 
+    min-height: 1.5em;
+    display: flex;
+    align-items: center;
+}
+
+/* 親要素の td 自体はクリック可能にする */
+tr td.relative {
+    cursor: pointer;
+}
+
+/* カレンダーアイコンを模したヒントを出す場合（任意） */
+#td-date::after {
+    content: "📅";
+    margin-left: auto;
+    font-size: 0.8rem;
+    opacity: 0.5;
+}
+#thumbnail {
+    object-fit: contain; /* アスペクト比を維持 */
+    background-color: #eee;
+    /* 解析前は非表示にしたい場合は初期値を調整 */
+}
+
+/* 連続登録中、画像が変わったことがわかるようにふわっと表示 */
+#thumbnail[src] {
+    animation: fadeIn 0.5s ease;
+}
