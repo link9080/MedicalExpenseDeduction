@@ -1,0 +1,9 @@
+# GAS設定ファイル（スクリプトIDが含まれるため除外）
+gas/.clasp.json
+
+# ノード関連
+node_modules/
+
+# OS固有のゴミファイル
+.DS_Store
+Thumbs.db
