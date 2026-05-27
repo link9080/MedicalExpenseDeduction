@@ -2,7 +2,7 @@
  * 医療費控除DX - Core Logic
  */
 // --- HTMLから直接呼ばれる関数を window に登録 ---
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzi6xerhTaYKn_LCXwhoxZpQO8EKF98k8P-h0ATIuPQylMMAJS61iOEyVC3TSErLImLlw/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbx9_GzzjiogNd_L-OB6AC6pkrmN1a3Chvvvm50yZlQA9XDUtgU6Kxc_36tTvUS-3H0UwA/exec";
 let lastImageBase64 = "";
 let datePicker, dateDisplay; // ここで宣言
 window.savePass = function () {
@@ -34,9 +34,17 @@ window.enableManualInput = function () {
     document.getElementById('manualInputOption').classList.add('hidden');
 
     document.getElementById('td-date').innerText = new Date().toISOString().split('T')[0].replace(/-/g, '/');
-    document.getElementById('td-price').innerText = "0";
     document.getElementById('td-store').innerText = "（手動入力）";
-    document.getElementById('td-item').innerText = "（手動入力）";
+
+    // 💡 商品コンテナに空の入力を1行だけ作る
+    const itemsContainer = document.getElementById('itemsContainer');
+    itemsContainer.innerHTML = `
+        <div class="item-row p-4 flex gap-2 items-center bg-white">
+            <input type="checkbox" checked class="item-checkbox w-4 h-4 text-blue-600 rounded">
+            <div class="flex-1 edit-item-name p-1 font-medium text-slate-700 border-b border-slate-200 text-sm" contenteditable="true">（手動入力の商品名）</div>
+            <div class="w-24 edit-item-price p-1 font-bold text-right text-slate-900 border-b border-slate-200 text-sm" contenteditable="true" inputmode="numeric">0</div>
+        </div>
+    `;
 
     // datePickerが取得できているか確認（なければここで取得）
     if (!datePicker) datePicker = document.getElementById('date-picker');
@@ -125,41 +133,102 @@ window.editItem = function (rowNum, date, price, store, itemName) {
     showPage('reg');
     document.getElementById('status').innerText = "📝 データを編集して保存してください";
 
+    // 編集モードでは「商品を追加する」ボタンを隠す
+    document.getElementById('addItemBtnContainer').classList.add('hidden');
+
     // ★編集時はサムネイルを隠す
     document.getElementById('thumbContainer').classList.add('hidden');
     document.getElementById('thumbnail').src = "";
 
     // フォームに現在の値をセット
     document.getElementById('td-date').innerText = date;
-    document.getElementById('td-price').innerText = price;
     document.getElementById('td-store').innerText = store;
-    document.getElementById('td-item').innerText = itemName;
+
+    // 💡 複数商品用のコンテナに、編集対象の「1件」をセットする
+    const itemsContainer = document.getElementById('itemsContainer');
+    itemsContainer.innerHTML = `
+        <div class="item-row p-4 flex gap-2 items-center bg-amber-50/50">
+            <input type="checkbox" checked class="item-checkbox hidden">
+            <div class="flex-1 edit-item-name p-1 font-medium text-slate-700 border-b border-amber-300 focus:border-blue-500 focus:bg-white text-sm" contenteditable="true">${itemName}</div>
+            <div class="w-24 edit-item-price p-1 font-bold text-right text-slate-900 border-b border-amber-300 focus:border-blue-500 focus:bg-white text-sm" contenteditable="true" inputmode="numeric">${price}</div>
+        </div>
+    `;
+
     document.getElementById('editCard').classList.remove('hidden');
 
     // 登録ボタンを「更新ボタン」に書き換える
     const regBtn = document.getElementById('regBtn');
+    regBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // 念のためスタイルリセット
+    regBtn.disabled = false;
     regBtn.innerText = "🆙 データを更新する";
+
     regBtn.onclick = async () => {
+        // スピナー代わりのUI変更
+        regBtn.disabled = true;
+        regBtn.innerText = "⌛ 更新中...";
+        regBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
         const pass = localStorage.getItem('my_app_pass');
+
+        // 💡 変更された値を入力をターゲットに指定して取得
+        const updatedItemName = document.querySelector('.edit-item-name').innerText.trim();
+        const updatedPrice = document.querySelector('.edit-item-price').innerText.replace(/[^0-9]/g, '');
+
         const data = {
             action: "update",
             rowNum: rowNum,
             pass: pass,
             date: document.getElementById('td-date').innerText.trim(),
-            price: document.getElementById('td-price').innerText.replace(/[^0-9]/g, ''),
             store: document.getElementById('td-store').innerText.trim(),
-            itemName: document.getElementById('td-item').innerText.trim()
+            itemName: updatedItemName, // 💡 新UIの場所から取得
+            price: updatedPrice        // 💡 新UIの場所から取得
         };
 
-        const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
-        const json = await res.json()
-        if (json.status === "success") {
-            alert("更新しました");
-            location.reload();
-        } else if (json.message.includes("認証エラー")) {
-            alert("❌ パスワードが違います");
+        try {
+            const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
+            const json = await res.json();
+
+            if (json.status === "success") {
+                alert("更新しました");
+                location.reload();
+            } else if (json.message.includes("認証エラー")) {
+                alert("❌ パスワードが違います");
+                regBtn.disabled = false;
+                regBtn.innerText = "🆙 データを更新する";
+                regBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                alert("更新エラー: " + json.message);
+                regBtn.disabled = false;
+                regBtn.innerText = "🆙 データを更新する";
+                regBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        } catch (e) {
+            alert("通信エラーが発生しました");
+            regBtn.disabled = false;
+            regBtn.innerText = "🆙 データを更新する";
+            regBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
     };
+};
+
+// 💡 手動で空の商品行を追加する関数
+window.addBlankItemRow = function () {
+    const itemsContainer = document.getElementById('itemsContainer');
+
+    // もし「対象商品が見つかりませんでした」のメッセージが表示されていたらクリアする
+    const noItemMsg = itemsContainer.querySelector('.no-item-message');
+    if (noItemMsg) {
+        itemsContainer.innerHTML = "";
+    }
+
+    const itemHtml = `
+        <div class="item-row p-4 flex gap-2 items-center bg-white hover:bg-slate-50 transition-colors animate-in fade-in duration-200">
+            <input type="checkbox" checked class="item-checkbox w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+            <div class="flex-1 edit-item-name p-1 font-medium text-slate-700 border-b border-slate-200 focus:border-blue-400 focus:bg-slate-50 text-sm" contenteditable="true">（新しい商品名）</div>
+            <div class="w-24 edit-item-price p-1 font-bold text-right text-slate-900 border-b border-slate-200 focus:border-blue-400 focus:bg-slate-50 text-sm" contenteditable="true" inputmode="numeric">0</div>
+        </div>
+    `;
+    itemsContainer.insertAdjacentHTML('beforeend', itemHtml);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -182,6 +251,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cameraInput').onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        //画像ファイル（image/）以外を弾くバリデーション
+        if (!file.type.startsWith('image/')) {
+            alert('画像ファイル（JPEG、PNGなど）を選択してください。PDFやその他のファイルは解析できません。');
+            e.target.value = ""; // 選択された不適切なファイルをクリア
+            return; // 処理をここで中断
+        }
 
         const status = document.getElementById('status');
         const label = e.target.parentElement; // 枠（label）を取得
@@ -222,17 +298,43 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("GASからのレスポンス:", json);
 
             if (json.status === "success") {
+                // 基本情報のセット
                 document.getElementById('td-date').innerText = json.data.date;
-                document.getElementById('td-price').innerText = json.data.price;
                 document.getElementById('td-store').innerText = json.data.store;
-                document.getElementById('td-item').innerText = json.data.itemName;
-                document.getElementById('editCard').classList.remove('hidden');
-                document.getElementById('regBtn').classList.remove('hidden'); // ボタン表示
-                // AIが返してきた "2024/02/27" 形式を "2024-02-27" に変換してセット
+
+                // 日付ピッカーの同期
                 const formattedDate = json.data.date.replace(/\//g, '-');
                 datePicker.value = formattedDate;
                 dateDisplay.innerText = json.data.date;
+
+                // 💡 複数商品の動的レンダリング
+                const itemsContainer = document.getElementById('itemsContainer');
+                itemsContainer.innerHTML = ""; // 初期化
+
+                if (json.data.items && json.data.items.length > 0) {
+                    json.data.items.forEach((item, index) => {
+                        const itemHtml = `
+                            <div class="item-row p-4 flex gap-2 items-center bg-white hover:bg-slate-50 transition-colors">
+                                <input type="checkbox" checked class="item-checkbox w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                                <div class="flex-1 edit-item-name p-1 font-medium text-slate-700 border-b border-transparent focus:border-blue-400 focus:bg-slate-50 text-sm" contenteditable="true">${item.name}</div>
+                                <div class="w-24 edit-item-price p-1 font-bold text-right text-slate-900 border-b border-transparent focus:border-blue-400 focus:bg-slate-50 text-sm" contenteditable="true" inputmode="numeric">${item.price}</div>
+                            </div>
+                        `;
+                        itemsContainer.insertAdjacentHTML('beforeend', itemHtml);
+                    });
+                } else {
+                    // 💡 あとでJavaScriptから消去しやすいように、class="no-item-message" を追加
+                    itemsContainer.innerHTML = `<p class="no-item-message text-center text-sm text-amber-600 py-4">対象商品が見つかりませんでした。</p>`;
+                }
+
+                document.getElementById('editCard').classList.remove('hidden');
+                document.getElementById('regBtn').classList.remove('hidden');
                 status.innerText = "✨ 解析が完了しました";
+
+            } else if (json.status === "invalid") {
+                // 💡 明らかにレシートではない画像だった場合の処理
+                status.innerText = `🚫 解析不可: ${json.message}`;
+
             } else if (json.message.includes("認証エラー")) {
                 status.innerText = "❌ パスワードが違います";
             } else {
@@ -256,55 +358,71 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = document.getElementById('regBtn');
         let date = document.getElementById('td-date').innerText.trim();
         let store = document.getElementById('td-store').innerText.trim();
-        let itemName = document.getElementById('td-item').innerText.trim();
-        let price = document.getElementById('td-price').innerText.replace(/[^0-9]/g, '');
 
         // バリデーション
         if (!/^\d{4}\/\d{2}\/\d{2}$/.test(date)) return alert("日付形式を YYYY/MM/DD にしてください");
-        if (!price) return alert("金額を数字で入力してください");
+
+        // 💡 画面上のすべての商品行を取得
+        const itemRows = document.querySelectorAll('.item-row');
+        let checkedRows = [];
+
+        itemRows.forEach(row => {
+            const isChecked = row.querySelector('.item-checkbox').checked;
+            if (isChecked) {
+                checkedRows.push({
+                    name: row.querySelector('.edit-item-name').innerText.trim(),
+                    price: row.querySelector('.edit-item-price').innerText.replace(/[^0-9]/g, '')
+                });
+            }
+        });
+
+        if (checkedRows.length === 0) return alert("登録する商品にチェックを入れてください");
 
         // --- 処理開始: ボタンを非活性に ---
         btn.disabled = true;
-        btn.innerText = "⌛ 保存中...";
         btn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        btn.disabled = true;
-        btn.innerText = "⌛ 保存中...";
-
-        const data = {
-            action: "register",
-            pass: localStorage.getItem('my_app_pass'),
-            date, store, itemName, price,
-            imageBaseBase64: lastImageBase64
-        };
-
+        // 💡 チェックされた商品の数だけ、順番にGASへ保存リクエストを送る（同期ループ）
         try {
-            const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
-            const json = await res.json();
-            if (json.status === "success") {
-                alert("登録完了しました！続けて別の項目を登録できます。");
+            for (let i = 0; i < checkedRows.length; i++) {
+                btn.innerText = `⌛ 保存中... (${i + 1}/${checkedRows.length}件目)`;
 
-                // 入力欄をクリア（画像 lastImageBase64 は保持される）
-                document.getElementById('td-price').innerText = "";
-                document.getElementById('td-item').innerText = "";
-                // 日付や店名は同じはずなので残しておくと便利です
+                const data = {
+                    action: "register",
+                    pass: localStorage.getItem('my_app_pass'),
+                    date,
+                    store,
+                    itemName: checkedRows[i].name, // 1件ずつ流し込む
+                    price: checkedRows[i].price,     // 1件ずつ流し込む
+                    imageBaseBase64: lastImageBase64
+                };
 
-                btn.disabled = false;
-                btn.innerText = "✅ 続けて別の商品を登録";
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            } else if (json.message.includes("認証エラー")) {
-                alert(json.message);
-            } else {
-                alert(json.message);
-                btn.disabled = false;
+                const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) });
+                const json = await res.json();
+
+                if (json.status !== "success") {
+                    throw new Error(json.message || "保存中にエラーが発生しました");
+                }
             }
+
+            // 💡 すべてのループが成功した場合
+            alert(`${checkedRows.length}件の医療費データを登録完了しました！`);
+
+            // 入力欄のクリア
+            document.getElementById('itemsContainer').innerHTML = "";
+            btn.disabled = false;
+            btn.innerText = "✅ 登録完了（続けて別のレシートをスキャン）";
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            // カードを隠してステータスを戻す
+            document.getElementById('editCard').classList.add('hidden');
+            document.getElementById('status').innerText = "画像をアップロードしてください";
+
         } catch (e) {
-            alert("送信エラー");
-            // 失敗時のみボタンを戻す
+            alert("送信エラー: " + e.message);
             btn.disabled = false;
             btn.innerText = "✅ この内容で確定・保存";
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
-
         }
     };
 

@@ -21,32 +21,72 @@ function doPost(e) {
     // --- モード1: 解析 (画像を受け取り、AIの結果だけ返す) ---
     if (params.action === "analyze") {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+      // プロンプト
+      const promptText = `
+画像が「レシート」または「領収書」であるか判定し、さらに医療費控除の対象となる可能性のある商品（医薬品、治療に必要な物品など）をすべて抽出してください。
+
+以下のJSON形式でのみ回答してください（マークダウンの装飾は不要です）。
+
+{
+  "isValid": true,          // 明らかにレシートでない場合は false
+  "invalidReason": "",      // isValidがfalseの場合、その理由（例: "風景の画像です" "文字が判別できません"）。通常は空文字
+  "store": "店舗名",
+  "date": "YYYY/MM/DD",
+  "totalPrice": 0,          // レシート全体の合計金額
+  "items": [                // 医療費控除に関係のある商品をここに配列で複数格納
+    {
+      "name": "商品名（例: ロキソニンS）",
+      "price": 0            // その商品の単価または購入金額
+    }
+  ]
+}
+`;
+
       const payload = {
         contents: [{
           parts: [
-            { text: "医療費控除用。画像から『購入場所、対象商品1つの名称、合計金額、購入日』を抽出し、以下のJSON形式のみで返してください：{\"store\": \"\", \"itemName\": \"\", \"price\": 0, \"date\": \"YYYY/MM/DD\"}" },
+            { text: promptText },
             { inline_data: { mime_type: "image/jpeg", data: params.imageBase64 } }
           ]
         }]
       };
 
-      const res = UrlFetchApp.fetch(url, { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true });
+      const res = UrlFetchApp.fetch(url, {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      });
+
       const responseCode = res.getResponseCode();
       const responseBody = res.getContentText();
 
       debugLog("Gemini Status Code: " + responseCode);
       debugLog("Gemini Body: " + responseBody);
+
       if (responseCode !== 200) {
-        return errorRes(res.getResponseCode() === 429 ? "Gemini無料枠制限です" : "Geminiエラー");
+        return errorRes(responseCode === 429 ? "Gemini無料枠制限です" : "Geminiエラー");
       }
+
       // 成功時のデータ解析
       try {
         const resJson = JSON.parse(responseBody);
         const resultText = resJson.candidates[0].content.parts[0].text;
+
         // マークダウンの除去
         const cleanJson = resultText.replace(/```json|```/g, '').trim();
         const aiData = JSON.parse(cleanJson);
 
+        // レシートではないと判定された場合のハンドリング
+        if (aiData.isValid === false) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "invalid",
+            message: aiData.invalidReason || "レシート画像として認識できませんでした。",
+            data: aiData // フロント側で理由を表示できるように一応データも渡す
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        // 正常に解析できた場合
         return ContentService.createTextOutput(JSON.stringify({
           status: "success",
           data: aiData

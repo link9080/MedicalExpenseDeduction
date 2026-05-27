@@ -43,8 +43,9 @@
                     <div
                         class="border-4 border-dashed border-slate-200 rounded-2xl py-10 hover:border-blue-400 transition-colors">
                         <span class="text-4xl mb-2 block">📸</span>
-                        <span class="text-slate-500 font-medium">レシートを撮影する</span>
-                        <input type="file" id="cameraInput" accept="image/*" class="hidden">
+                        <span class="text-slate-500 font-medium">レシートを撮影・選択する</span>
+
+                        <input type="file" id="cameraInput" accept="image/*, .dummy" class="hidden">
                     </div>
                 </label>
                 <div id="status" class="text-center text-sm text-slate-500 mb-4">
@@ -81,19 +82,23 @@
                         </td>
                     </tr>
                     <tr class="border-b border-slate-100">
-                        <th class="p-4 text-left text-xs text-slate-500 bg-slate-50/50">金額</th>
-                        <td id="td-price" class="edit-area p-4 text-lg font-black text-slate-900" contenteditable="true"
-                            inputmode="numeric"></td>
-                    </tr>
-                    <tr class="border-b border-slate-100">
                         <th class="p-4 text-left text-xs text-slate-500 bg-slate-50/50">取引先</th>
                         <td id="td-store" class="edit-area p-4 font-bold text-slate-700" contenteditable="true"></td>
                     </tr>
-                    <tr>
-                        <th class="p-4 text-left text-xs text-slate-500 bg-slate-50/50">商品名/内容</th>
-                        <td id="td-item" class="edit-area p-4 text-slate-600" contenteditable="true"></td>
+                    <tr class="border-b border-slate-100 bg-blue-50/30">
+                        <th colspan="2" class="p-2 text-left text-xs font-bold text-blue-800 px-4">医療費控除 対象商品リスト</th>
                     </tr>
                 </table>
+
+                <div id="itemsContainer" class="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                </div>
+                <div id="addItemBtnContainer" class="p-3 bg-slate-50 border-t border-slate-100 text-left">
+                    <button type="button" onclick="addBlankItemRow()"
+                        class="text-xs bg-white hover:bg-slate-100 text-blue-600 font-bold py-2 px-4 rounded-xl border border-slate-200 shadow-sm transition-colors flex items-center gap-1">
+                        ➕ 商品を追加する
+                    </button>
+                </div>
+
                 <button id="regBtn"
                     class="w-full bg-green-500 hover:bg-green-600 text-white py-5 font-black text-lg transition-colors flex items-center justify-center gap-2">
                     ✅ この内容で確定・保存
