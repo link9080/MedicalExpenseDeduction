@@ -20,7 +20,9 @@ function doPost(e) {
 
     // --- モード1: 解析 (画像を受け取り、AIの結果だけ返す) ---
     if (params.action === "analyze") {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
+      // 【変更】スクリプトプロパティからURLのベースを取得（未設定の場合はデフォルトを使用）
+      const apiUrlBase = props.getProperty('GEMINI_API_URL') || "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+
       // プロンプト
       const promptText = `
 画像が「レシート」または「領収書」であるか判定し、さらに医療費控除の対象となる可能性のある商品（医薬品、治療に必要な物品など）をすべて抽出してください。
@@ -51,13 +53,16 @@ function doPost(e) {
         }]
       };
 
-      const res = UrlFetchApp.fetch(url, {
+      const options = {
         method: "post",
         contentType: "application/json",
         payload: JSON.stringify(payload),
         muteHttpExceptions: true
-      });
+      };
 
+      // 【変更点】503や429エラー時に自動リトライする関数を使用
+      const url = `${apiUrlBase}?key=${apiKey}`;
+      const res = fetchGeminiWithRetry(url, options, 3);
       const responseCode = res.getResponseCode();
       const responseBody = res.getContentText();
 
@@ -167,6 +172,27 @@ function doPost(e) {
   }
 }
 
+// 【追加】503や429エラー時に数秒待って再試行する関数
+function fetchGeminiWithRetry(url, options, maxRetries) {
+  let delay = 2000; // 初回待機時間: 2秒
+  for (let i = 0; i < maxRetries; i++) {
+    const res = UrlFetchApp.fetch(url, options);
+    const code = res.getResponseCode();
+    
+    // 503 (Service Unavailable) または 429 (Too Many Requests) でなければ成功扱いとして返す
+    if (code !== 503 && code !== 429) {
+      return res;
+    }
+    
+    if (i === maxRetries - 1) {
+      return res; // 最大試行回数に達した場合は最後のレスポンスを返す
+    }
+    
+    debugLog(`Gemini API 混雑中 (Status: ${code})。${delay / 1000}秒後にリトライします (${i + 1}/${maxRetries})`);
+    Utilities.sleep(delay);
+    delay *= 2; // 指数バックオフ（次は4秒、その次は8秒…と待機時間を増やす）
+  }
+}
 function doGet(e) {
   try {
     const props = PropertiesService.getScriptProperties();

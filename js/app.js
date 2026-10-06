@@ -2,7 +2,7 @@
  * 医療費控除DX - Core Logic
  */
 // --- HTMLから直接呼ばれる関数を window に登録 ---
-const GAS_URL = "https://script.google.com/macros/s/AKfycbx9_GzzjiogNd_L-OB6AC6pkrmN1a3Chvvvm50yZlQA9XDUtgU6Kxc_36tTvUS-3H0UwA/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzACJuhz5o57jqnGukE2wJ-dgwiQ8HmyniwodoAICskSbEV6cYESU6nlC6QntjZ1tD-9g/exec";
 let lastImageBase64 = "";
 let datePicker, dateDisplay; // ここで宣言
 window.savePass = function () {
